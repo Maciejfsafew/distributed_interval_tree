@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+
 int proc;
 int range;
 int world_rank;
@@ -72,10 +73,46 @@ void sequential(){
   }
 }
 
+int* min_nodes;
+const int MAIN_TREE_LVL = 10;
+const int MAIN_TREEE_SIZE = 1024*2-1;
 void parallel(){
         //    MPI::COMM_WORLD.Send(buff, s, MPI_BYTE, j, 0);
         //  MPI::COMM_WORLD.Recv(recv, s, MPI_BYTE, 0, 0, status);
- 
+  if ( world_rank == 0){
+    min_nodes = new int[proc];
+    int r = range / proc;
+    min_nodes[0]=0;
+    for(int i =1; i < proc; i ++)
+      min_nodes[i] = r + min_nodes[i-1];
+  
+    for(int i = 0; i < proc; i ++)
+      printf("%d ", min_nodes[i]);
+    printf("\n");
+   
+    tree = new int[MAIN_TREE_SIZE];
+    for(int i = 0; i < MAIN_TREE_SIZE; i ++)
+      tree[i] = 0;
+  
+    for(int i = 0; i < n; i++){
+      scanf("%d %d",&a,&b);
+      if(a == -1){
+        insert(b);
+      } else {
+        int sum = query(a,b);
+        printf("%d\n",sum);
+      }
+    }
+
+    
+
+    free(min_nodes);
+    free(tree);
+
+  } else {
+
+
+  }
 }
 
 int main(int argc, char** argv) {
