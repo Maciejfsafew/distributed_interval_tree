@@ -16,21 +16,28 @@ using namespace std;
 //insert value => -1 index
 int main(int argc, char** argv) {
 
-  int numbers = atoi(argv[1]);
-  int range = atoi(argv[2]);
+  long long numbers = atol(argv[1]);
+  long long range = atol(argv[2]);
   srand(time(NULL));
-  printf("%d\n",numbers);
-  for(int i = 0; i < numbers; i++ ){
+  printf("%lld\n",numbers);
+  for(long long i = 0; i < numbers; i++ ){
     int insert = rand()%2;
     if(insert == 1){
-      printf("%d %d\n",-1,rand()%range);
+      long long a = rand();
+      a = rand()* a;
+      a = a % range;
+      printf("%d %lld\n",-1,a);
       continue;
     }
-    int begin = rand()%range;
-    int end = rand()%range;
+    long long begin = rand();
+    begin = rand() * begin;
+    begin = begin % range;
+    long long end = rand();
+    end = end * rand();
+    end = end % range;
     if (begin>end)
       swap(begin,end);
-    printf("%d %d\n",begin,end);
+    printf("%lld %lld\n",begin,end);
   }
   return 0;
 }

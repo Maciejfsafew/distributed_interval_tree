@@ -151,10 +151,14 @@ void parallel(){
         long long sum = query_root(a,b);
         printf("%lld\n",sum);
       }
-
+      
+    }
+    
+    buff[0]=-2;
+    for(int i = 1; i < proc; i++){
+      MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,i,0);
     }
 
-    
 
     free(tree);
     free(procOwner);
@@ -186,7 +190,7 @@ void parallel(){
       printf("Inserted proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
 #endif
 
-      } else {
+      } else if(buff[0]!=-2){
         g = 0;
 #ifdef _DEBUG
  printf("Before Queryed proc %d values %lld %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2],g);
@@ -200,9 +204,12 @@ void parallel(){
       printf("Queryed proc %d values %lld %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2],g);
 #endif
 
+      
+      } else {
+      
+        break;
       }
     }
-
   }
 }
 
