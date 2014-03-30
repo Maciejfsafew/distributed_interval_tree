@@ -40,12 +40,23 @@ long long sub_query(long long* tree, long long a, long long b);
 //ROOT VARIABLES
 long long* tree;
 long long** queries;
+long long** queries_backup;
+int* queries_count;
+int* queries_count_backup;
+long long* all_requests;
+long long* all_requests_backup;
+int total_count = 0;
+int total_count_backup = 0;
+int** requests_queries;
+int** requests_queries_backup;
+
 int* procOwner;
 int* countNr;
 int* procCounts;
 long long n;
 long long *buff;
 const int BUFF_SIZE = 1000;
+int max_buff = 0;
 
 void initialize(int count){
   trees = new long long *[count];
@@ -79,13 +90,22 @@ void insert_root(long long x){
   printf("tree insert x(%lld) ",x); for(int i = 0; i < size; i++)printf("%lld ",tree[i]); printf("\n");
   printf("sub insert owner %d count %d sub val %lld\n", procOwner[v], countNr[v],x-begin);
 #endif
-  buff[0] = -1;
-  buff[1] = countNr[v];
-  buff[2] = x - begin;
-  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
-  //insert(trees[procOwner[v]][countNr[v]],x-begin);
+//  buff[0] = -1;
+//  buff[1] = countNr[v];
+//  buff[2] = x - begin;
+//  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
+
+
+queries[procOwner[v]][3*queries_count[procOwner[v]]]=-1;
+queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=countNr[v];
+queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-begin;
+requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
+queries_count[procOwner[v]]++;
+
+all_requests[total_count]=-1;
+total_count++;
 }
-long long lower(long long x){
+void lower(long long x){
   long long begin = 0, end = range -1, v = 1, lvl = 1;
   long long res = 0;
   while(lvl<lvl_of_root){
@@ -106,20 +126,66 @@ long long lower(long long x){
   printf("lower x %lld res %lld\n",x,res);
   printf("sub query v %lld owner %d countNr %d end %lld\n",v,procOwner[v],countNr[v],x-1-begin);
 #endif
-  buff[0] = countNr[v];
-  buff[1] = 0;
-  buff[2] = x -1 - begin;
-  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
-  long long b = 0;
-  MPI::COMM_WORLD.Recv(&b,1,MPI_LONG_LONG_INT,procOwner[v],0,status);
-  return res + b;
+
+queries[procOwner[v]][3*queries_count[procOwner[v]]]=countNr[v];
+queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=0;
+queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-1-begin;
+requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
+queries_count[procOwner[v]]++;
+
+all_requests[total_count]=res;
+total_count++;
+//  buff[0] = countNr[v];
+//  buff[1] = 0;
+//  buff[2] = x -1 - begin;
+//  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
+//  long long b = 0;
+//  MPI::COMM_WORLD.Recv(&b,1,MPI_LONG_LONG_INT,procOwner[v],0,status);
+//  return res + b;
   //return res + query(trees[procOwner[v]][countNr[v]],0,x-1-begin);
 }
 
-long long query_root(long long a, long long b){
-  return lower(b+1)-lower(a);
+void query_root(long long a, long long b){
+  lower(b+1);
+  lower(a);
 }
+void send(){
+  for(int i = 0; i < proc -1; i ++){
+    int w = queries_count[i]*3;
+    if(w>0){
+  	  MPI::COMM_WORLD.Send(&w,1,MPI_INT,i,0);
+  	  MPI::COMM_WORLD.Send(queries[i],w,MPI_INT,i,0);
+    }
+  }
 
+  for(int i = 0; i < proc -1; i ++){
+    int w = queries_count[i];
+    if(w>0){
+  	  MPI::COMM_WORLD.Recv(queries[i],w,MPI_INT,i,0,status);
+    }
+  }
+  
+  for(int i = 0; i < proc -1; i++){
+	  int w = queries_count[i];
+	  for(int j = 0; j < w; j++){
+		  all_requests[requests_queries[i][j]]+=queries[i][j];
+	  }
+	  queries_count[i] = 0;
+  }	
+  int i = 0;
+  
+  while(i < total_count){
+	if(all_requests[i]>-1){
+	  printf("%lld\n",all_requests[i]-all_requests[i+1]);
+	  i+=2;
+	} else {
+	  printf("%lld\n",all_requests[i]);
+	  i++;
+	}
+  }
+  
+  total_count = 0;
+}
 void parallel(){
   if ( world_rank == 0){
     tree = new long long[size];
@@ -142,6 +208,18 @@ void parallel(){
     for(int i = 1; i < proc; i++){
       MPI::COMM_WORLD.Send(&procCounts[i],1,MPI_INT,i,0);
     } 
+    queries = new long long*[proc-1];
+    queries_backup = new long long*[proc-1];
+    requests_queries = new int*[proc -1];
+    queries_count = new int[proc-1];
+    queries_count_backup = new int[proc-1];
+    for(int i = 0; i < proc-1; i++){
+      queries_count[i] = 0;
+      queries_count_backup[i] = 0;
+	  queries[i] = new long long[batch];
+	  queries_backup = new long long[batch];
+	  requests_queries = new int[batch];	
+	}
     
     scanf("%lld",&n);
     long long a,b; 
@@ -150,15 +228,18 @@ void parallel(){
       if(a == -1){
         insert_root(b);
       } else {
-        long long sum = query_root(a,b);
-        printf("%lld\n",sum);
+        query_root(a,b);
       }
-      
+      if(max_buff >= batch-1){
+        send();
+      }  
     }
+    send();
     
-    buff[0]=-2;
+    
+    long long w = -1;
     for(int i = 1; i < proc; i++){
-      MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,i,0);
+      MPI::COMM_WORLD.Send(&w,1,MPI_LONG_LONG_INT,i,0);
     }
 
 
@@ -178,7 +259,7 @@ void parallel(){
     buff = new long long[3*batch];
     while(true){
       int g=0;
-      MPI::COMM_WORLD.Recv(&g,1,MPI_LONG_LONG_INT,0,0,status);
+      MPI::COMM_WORLD.Recv(&g,1,MPI_INT,0,0,status);
 #ifdef _DEBUG
       printf("Received proc %d count %lld\n",world_rank,g);
 #endif
@@ -189,7 +270,7 @@ void parallel(){
 #ifdef _DEBUG
       printf("Inserted proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
 #endif
-        for(int i = 0; i < g; i +=3){
+        for(int i = 0; i < 3*g; i +=3){
 			if(buff[i] == -1){
 		      sub_insert(buff[i+1],buff[i+2]);
 		      buff[i/3]=0;   
