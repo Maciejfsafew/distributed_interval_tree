@@ -1,7 +1,7 @@
 Parallel implementation of interval tree
 ========================================
 
-The main purpose of this project is to create parallel implementation of interval tree, that will allow to create very large models (range >1.000.000.000). It is possible to create tree with 500.000.000 of nodes on a single machine. In order to create more nodes it is necessary to use the cluster of machines (it is also possible to use swap/store values on a hard disk). 
+The main purpose of this project is to create parallel implementation of interval tree, that will allow to create very large models (range >100.000.000). It is possible to create tree with ~100.000.000-200.000.000 of nodes on a single machine. In order to create more nodes it is necessary to use the cluster of machines (it is also possible to use swap/store values on a hard disk). 
 
 Usually it is possible to do some additional preprocessing in order to shrink the size of tree:
 
@@ -68,47 +68,30 @@ MPI, C++, Interval Tree
     interval_tree_sequential_nlogn.cpp
     ```
     Time: O(nlogr)   (r = range)
-    Memory: O(r)    ~ 2 * range    (range MAX ~ 500.000.000 - 1000.000.000)
+    Memory: O(r)    ~ 2 * range    (range MAX ~ 100.000.000 - 200.000.000)
     Type: int
     ```
     ```bash
     ./sequential.out range < test100000000_200000000  // range = 200.000.000
     ```
 
-4.  NLOGN PROTOTYPE
-
-    interval_tree_parallel_1_proc.cpp
-    ```
-    Prototype
-    Time: O(n*log(range))
-    Memory: O(r)
-    ```
-5.  PARALLEL INEFFICIENT
+4.  PARALLEL
   
-    interval_tree_parallel.cpp
+    interval_tree_parallel_batch.cpp
 
-    Parallel implementation (range MAX (theoretically) ~ machines * 200.000.000))
+    Parallel implementation (range MAX  - tested with 1.000.000.000 range (long longs) (tree length ~ 2.000.000.000, size ~ 15 GB))
     ``` 
     Time: ~ O(n*(log(n-k))+log(k)/m) ( + network overhead )  m - machines, k - number of layers on slaves side
     Memory: ~ O(r)
     Type: long long
     ```
     ```bash
-    $ time mpiexec -np procs ./parallel.out procs range levels < test1000_1000.in
+    $ time mpiexec -np procs ./parallel.out procs range levels batch < test1000_1000.in
     procs - nr of processes
     range - range of interval tree [0,range -1]
     levels - layers on root
+    batch - grouping requests
     ```
-    There is communication overhead in this implementation. 
 
 
-
-6.  FINAL VERSION BATCH 
-
-    interval_tree_parallel_batch.cpp
-    ```
-    Optimized version of parallel implementation. (Request batching)
-
-    In progress
-    ```
 
