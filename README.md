@@ -78,8 +78,11 @@ MPI, C++, Interval Tree
 4.  PARALLEL
   
     interval_tree_parallel_batch.cpp
-
-    Parallel implementation (range MAX  - tested with 1.000.000.000 range (long longs) (tree length ~ 2.000.000.000, size ~ 15 GB))
+    ```
+    Parallel implementation 
+    Range -  tested with 1.000.000.000 (long longs) 
+    Tree length ~ 2.000.000.000, size ~ 15 GB (couple of machines)
+    ```
     ``` 
     Time: ~ O(n*(log(n-k))+log(k)/m) ( + network overhead )  m - machines, k - number of layers on slaves side
     Memory: ~ O(r)
