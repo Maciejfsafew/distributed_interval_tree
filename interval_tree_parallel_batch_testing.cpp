@@ -11,31 +11,22 @@ using namespace std;
 int proc;
 // total range of tree
 long long range;
-// range of single subree
 long long sub_range;
 
-// number of batched requests
 int batch;
 // proc nr
 int world_rank;
-// nr of processes
 int world_size;
 
-// lvls in root tree (layers in tree)
+// lvls in root tree
 int lvl_of_root;
 
 MPI::Status status;
 // range of single sub tree
-// value to add to get index of leaf [shift + val]
 long long shift;
-// the same - subtree
 long long sub_shift;
-
 long long root_tree_size;
-
-//size of root tree
 long long size;
-//total size of sub tree
 long long sub_size;
 ////////////////////////////////////////////////////////////////////////////////////////
 // SUBNODES
@@ -50,40 +41,25 @@ long long sub_query(long long* tree, long long a, long long b);
 
 //ROOT VARIABLES
 long long* tree;
-//array of queries per process, query = triples
 long long** queries;
-//backup - speedup
 long long** queries_backup;
-//querys per process
 int* queries_count;
-//backup - speedup
 int* queries_count_backup;
-//array of pending requests
 long long* all_requests;
 long long* all_requests_backup;
-//total count of requests
 int total_count = 0;
 int total_count_backup = 0;
-//indexes all_requests array
 int** requests_queries;
 int** requests_queries_backup;
 
-// owner of subtree
 int* procOwner;
-// owner's nr of tree
 int* countNr;
-//
 int* procCounts;
-
-// lines in file
 long long n;
-// slave buffer
 long long *buff;
-// max_buff = max(queries_count)
-// if max_buff > value : send all buffers
+const int BUFF_SIZE = 1000;
 int max_buff = 0;
 
-//Create subtrees
 void initialize(int count){
   trees = new long long *[count];
   sub_size = 1;
@@ -91,6 +67,9 @@ void initialize(int count){
   for(int i = 0; i < count; i ++){
     trees[i] = new long long[2*sub_size];
     for(int j = 0; j < 2*sub_size; j ++)trees[i][j] = 0;
+#ifdef _DEBUG
+    printf("tree pr %d nr %d size %lld\t",world_rank,i,sub_size*2); for(int j = 0; j < 2*sub_size; j++)printf("%lld ",trees[i][j]); printf("\n");
+#endif
   }
 }
 void insert_root(long long x){
@@ -109,17 +88,26 @@ void insert_root(long long x){
     lvl++;
   }
   v = v - shift;
+#ifdef _DEBUG
+  printf("tree insert x(%lld) ",x); for(int i = 0; i < size; i++)printf("%lld ",tree[i]); printf("\n");
+  printf("sub insert owner %d count %d sub val %lld q_count %d\n", procOwner[v], countNr[v],x-begin,queries_count[procOwner[v]]);
+#endif
+//  buff[0] = -1;
+//  buff[1] = countNr[v];
+//  buff[2] = x - begin;
+//  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
 
-  queries[procOwner[v]][3*queries_count[procOwner[v]]]=-1;
-  queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=countNr[v];
-  queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-begin;
-  requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
-  queries_count[procOwner[v]]++;
 
-  max_buff = max(max_buff,queries_count[procOwner[v]]);
+queries[procOwner[v]][3*queries_count[procOwner[v]]]=-1;
+queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=countNr[v];
+queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-begin;
+requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
+queries_count[procOwner[v]]++;
 
-  all_requests[total_count]=-1;
-  total_count++;
+max_buff = max(max_buff,queries_count[procOwner[v]]);
+
+all_requests[total_count]=-1;
+total_count++;
 }
 void lower(long long x){
   long long begin = 0, end = range -1, v = 1, lvl = 1;
@@ -137,17 +125,30 @@ void lower(long long x){
     lvl ++;
   }
   v = v - shift;
+  //return res;  
+#ifdef _DEBUG
+  printf("lower x %lld res %lld\n",x,res);
+  printf("LOWER sub query v %lld owner %d countNr %d end %lld queries_count %d \n",v,procOwner[v],countNr[v],x-1-begin,queries_count[procOwner[v]]);
+#endif
 
-  queries[procOwner[v]][3*queries_count[procOwner[v]]]=countNr[v];
-  queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=0;
-  queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-1-begin;
-  requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
-  queries_count[procOwner[v]]++;
+queries[procOwner[v]][3*queries_count[procOwner[v]]]=countNr[v];
+queries[procOwner[v]][3*queries_count[procOwner[v]]+1]=0;
+queries[procOwner[v]][3*queries_count[procOwner[v]]+2]=x-1-begin;
+requests_queries[procOwner[v]][queries_count[procOwner[v]]]=total_count;
+queries_count[procOwner[v]]++;
 
-  max_buff = max(max_buff,queries_count[procOwner[v]]);
-  all_requests[total_count]=res;
-  total_count++;
+max_buff = max(max_buff,queries_count[procOwner[v]]);
+all_requests[total_count]=res;
+total_count++;
 
+//  buff[0] = countNr[v];
+//  buff[1] = 0;
+//  buff[2] = x -1 - begin;
+//  MPI::COMM_WORLD.Send(buff,3,MPI_LONG_LONG_INT,procOwner[v],0);
+//  long long b = 0;
+//  MPI::COMM_WORLD.Recv(&b,1,MPI_LONG_LONG_INT,procOwner[v],0,status);
+//  return res + b;
+  //return res + query(trees[procOwner[v]][countNr[v]],0,x-1-begin);
 }
 
 void query_root(long long a, long long b){
@@ -169,6 +170,8 @@ void send(){
   	  MPI::COMM_WORLD.Send(queries[i],3*w,MPI_LONG_LONG_INT,i,0);
     }
   }
+
+
   
   for(int i = 0; i < proc; i++){
 	  int w = queries_count[i];
@@ -211,6 +214,12 @@ void parallel(){
       procCounts[procOwner[i]]++;
       countNr[i] = procCounts[procOwner[i]]-1;
     }
+#ifdef _DEBUG
+
+    printf("proc Owner "); for(int i = 0; i < shift; i++)printf("%d ",procOwner[i]); printf("\n");
+    printf("count Nr "); for(int i = 0; i < shift; i++)printf("%d ",countNr[i]); printf("\n");
+    printf("proc Counts "); for(int i = 0; i < proc; i++)printf("%d ",procCounts[i]); printf("\n");
+#endif
     for(int i = 1; i < proc; i++){
       MPI::COMM_WORLD.Send(&procCounts[i],1,MPI_INT,i,0);
     } 
@@ -259,16 +268,35 @@ void parallel(){
 
   } else {
     MPI::COMM_WORLD.Recv(&nr_of_subtrees,1,MPI_INT,0,0,status);
+#ifdef _DEBUG
+    printf("Init proc %d nr_of_subtrees %d\n",world_rank,nr_of_subtrees);
+#endif
     initialize(nr_of_subtrees);
+#ifdef _DEBUG
+    printf("Initialized proc %d\n",world_rank);
+#endif
     buff = new long long[3*batch];
     while(true){
       int g=0;
+#ifdef _DEBUG
+      printf("Waiting for size proc %d count %d\n",world_rank,g);
+#endif
       MPI::COMM_WORLD.Recv(&g,1,MPI_INT,0,0,status);
+#ifdef _DEBUG
+      printf("Received proc %d count %d\n",world_rank,g);
+#endif
+
       
       if(g>=0){
         MPI::COMM_WORLD.Recv(buff,3*g,MPI_LONG_LONG_INT,0,0,status);
+#ifdef _DEBUG
+      printf("Inserted proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
+#endif
         for(int i = 0; i < 3*g; i +=3){
 
+#ifdef _DEBUG
+      printf("Got values %lld %lld %lld\n",buff[i],buff[i+1],buff[i+2]);
+#endif
 			if(buff[i] == -1){
 		      sub_insert(trees[buff[i+1]],buff[i+2]);
 		      buff[i/3]=0;   
@@ -298,13 +326,25 @@ int main(int argc, char** argv) {
     return -1;
   }
   proc = atoi(argv[1]);
+#ifdef _DEBUG
+  if(world_rank == 0)
+    printf("proc %d\n",proc);
+#endif
 
   range = atoi(argv[2]);
   int w = 1; 
   while(w < range) w *= 2;
   range = w;
+#ifdef _DEBUG
+  if(world_rank == 0)  
+    printf("range %lld\n",range);
+#endif
 
   lvl_of_root = atoi(argv[3]);
+#ifdef _DEBUG
+  if(world_rank == 0)
+    printf("lvl_of_root %d\n", lvl_of_root);
+#endif
 
   batch = atoi(argv[4]);
   
@@ -319,6 +359,10 @@ int main(int argc, char** argv) {
   while(sub_size<sub_range*2) sub_size *= 2;
 
   sub_shift = sub_size/2;
+#ifdef _DEBUG
+  if(world_rank == 0)
+    printf("size %lld shift %lld sub_size %lld sub_range %lld sub_shift %lld\n",size,shift,sub_size,sub_range,sub_shift);
+#endif
   
 
   double t0 = MPI_Wtime();
@@ -334,16 +378,25 @@ int main(int argc, char** argv) {
 // SUB PROCEDURES
 /////////////////////////////////////////////////////////////////////////////////////
 void sub_insert(long long *sub_tree, long long x){
+#ifdef _DEBUG
+  printf("SUB_INSERT proc %d x %lld",world_rank,x); 
+#endif
   long long v = sub_shift+x;
   sub_tree[v]++;
   while(v!=1){
     v/=2;
     sub_tree[v] = sub_tree[2*v] + sub_tree[2*v+1];
   }
+#ifdef _DEBUG
+  printf("sub tree insert "); for(int i = 0; i < 2*sub_size; i++)printf("%lld ",sub_tree[i]); printf("\n");
+#endif
 
 }
 
 long long sub_query(long long* sub_tree, long long a, long long b){
+#ifdef _DEBUG
+  printf("SubQuery %lld %lld\n",a,b);
+#endif
   if(b<a||a<0||b<0)return 0;
   long long va = sub_shift+a;
   long long vb = sub_shift+b;
@@ -354,6 +407,9 @@ long long sub_query(long long* sub_tree, long long a, long long b){
     if(vb%2==1) wyn += sub_tree[vb-1];
     va/=2; vb/=2;
   }
+#ifdef _DEBUG
+  printf("subquery a %lld b %lld wyn %lld\n", a,b,wyn);
+#endif
   return wyn;
 }
 
