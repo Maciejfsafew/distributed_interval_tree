@@ -11,6 +11,7 @@ int proc;
 long long range;
 long long sub_range;
 
+int batch;
 // proc nr
 int world_rank;
 int world_size;
@@ -38,6 +39,7 @@ long long sub_query(long long* tree, long long a, long long b);
 
 //ROOT VARIABLES
 long long* tree;
+long long** queries;
 int* procOwner;
 int* countNr;
 int* procCounts;
@@ -173,43 +175,35 @@ void parallel(){
 #ifdef _DEBUG
     printf("Initialized proc %d\n",world_rank);
 #endif
-    
+    buff = new long long[3*batch];
     while(true){
-      long long g;
+      int g=0;
+      MPI::COMM_WORLD.Recv(&g,1,MPI_LONG_LONG_INT,0,0,status);
 #ifdef _DEBUG
-      printf("Waiting proc %d\n",world_rank);
-#endif
-
-      MPI::COMM_WORLD.Recv(buff,3,MPI_LONG_LONG_INT,0,0,status);
-#ifdef _DEBUG
-      printf("Received proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
-#endif
-      if(buff[0]==-1){
-        sub_insert(trees[buff[1]],buff[2]);
-#ifdef _DEBUG
-      printf("Inserted proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
-#endif
-
-      } else if(buff[0]!=-2){
-        g = 0;
-#ifdef _DEBUG
- printf("Before Queryed proc %d values %lld %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2],g);
-#endif
-        g = sub_query(trees[buff[0]],buff[1],buff[2]);
-#ifdef _DEBUG
- printf("After Queryed proc %d values %lld %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2],g);
-#endif
-        MPI::COMM_WORLD.Send(&g,1,MPI_LONG_LONG_INT,0,0); 
-#ifdef _DEBUG
-      printf("Queryed proc %d values %lld %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2],g);
+      printf("Received proc %d count %lld\n",world_rank,g);
 #endif
 
       
+      if(g>=0){
+        MPI::COMM_WORLD.Recv(buff,3*g,MPI_LONG_LONG_INT,0,0,status);
+#ifdef _DEBUG
+      printf("Inserted proc %d values %lld %lld %lld\n",world_rank,buff[0],buff[1],buff[2]);
+#endif
+        for(int i = 0; i < g; i +=3){
+			if(buff[i] == -1){
+		      sub_insert(buff[i+1],buff[i+2]);
+		      buff[i/3]=0;   
+		    } else {
+			  buff[i/3]=sub_query(buff[i],buff[i+1],buff[i+2]);	
+		    }
+		}
+		MPI::COMM_WORLD.Send(buff,g,MPI_LONG_LONG_INT,0,0);
       } else {
       
         break;
       }
     }
+    free(buff);
   }
 }
 
@@ -245,6 +239,8 @@ int main(int argc, char** argv) {
     printf("lvl_of_root %d\n", lvl_of_root);
 #endif
 
+  batch = atoi(argv[4]);
+  
   size = 1;
   for(int i = 0; i < lvl_of_root; i ++)size *= 2;
   shift = size/2;
