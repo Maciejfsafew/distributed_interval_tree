@@ -12,7 +12,8 @@ int proc;
 // total range of tree
 long long range;
 // range of single subree
-long long sub_range;
+typedef int num;
+num sub_range;
 
 // number of batched requests
 int batch;
@@ -29,38 +30,38 @@ MPI::Status status;
 // value to add to get index of leaf [shift + val]
 long long shift;
 // the same - subtree
-long long sub_shift;
+num sub_shift;
 
 long long root_tree_size;
 
 //size of root tree
 long long size;
 //total size of sub tree
-long long sub_size;
+num sub_size;
 ////////////////////////////////////////////////////////////////////////////////////////
 // SUBNODES
 ////////////////////////////////////////////////////////////////////////////////////////
 // nr of sub trees in subnode
 int nr_of_subtrees;
 // array of subtrees
-long long** trees;
+num** trees;
 
-void sub_insert(long long * tree, long long x);
-long long sub_query(long long* tree, long long a, long long b);
+void sub_insert(num * tree, num x);
+num sub_query(num* tree, num a, num b);
 
 //ROOT VARIABLES
-long long* tree;
+num* tree;
 //array of queries per process, query = triples
-long long** queries;
+num** queries;
 //backup - speedup
-long long** queries_backup;
+num** queries_backup;
 //querys per process
-int* queries_count;
+num* queries_count;
 //backup - speedup
 int* queries_count_backup;
 //array of pending requests
-long long* all_requests;
-long long* all_requests_backup;
+num* all_requests;
+num* all_requests_backup;
 //total count of requests
 int total_count = 0;
 int total_count_backup = 0;
@@ -73,23 +74,23 @@ int* procOwner;
 // owner's nr of tree
 int* countNr;
 //
-int* procCounts;
+num* procCounts;
 
 // lines in file
 long long n;
 // slave buffer
-long long *buff;
+num *buff;
 // max_buff = max(queries_count)
 // if max_buff > value : send all buffers
 int max_buff = 0;
 
 //Create subtrees
 void initialize(int count){
-  trees = new long long *[count];
+  trees = new num *[count];
   sub_size = 1;
   while(sub_size<sub_range) sub_size *= 2;
   for(int i = 0; i < count; i ++){
-    trees[i] = new long long[2*sub_size];
+    trees[i] = new num[2*sub_size];
     for(int j = 0; j < 2*sub_size; j ++)trees[i][j] = 0;
   }
 }
@@ -156,9 +157,9 @@ void query_root(long long a, long long b){
 }
 void send(){
   for(int i = 0; i < proc; i ++){
-    int w = queries_count_backup[i];
+    num w = queries_count_backup[i];
     if(w>0){
-  	  MPI::COMM_WORLD.Recv(queries_backup[i],w,MPI_LONG_LONG_INT,i,0,status);
+  	  MPI::COMM_WORLD.Recv(queries_backup[i],w,MPI_INT,i,0,status);
     }
   }
   
@@ -166,7 +167,7 @@ void send(){
     int w = queries_count[i];
     if(w>0){
   	  MPI::COMM_WORLD.Send(&w,1,MPI_INT,i,0);
-  	  MPI::COMM_WORLD.Send(queries[i],3*w,MPI_LONG_LONG_INT,i,0);
+  	  MPI::COMM_WORLD.Send(queries[i],3*w,MPI_INT,i,0);
     }
   }
   
@@ -181,7 +182,7 @@ void send(){
   
   while(i < total_count_backup){
 	if(all_requests_backup[i]>-1){
-	  printf("%lld\n",all_requests_backup[i]-all_requests_backup[i+1]);
+	  printf("%d\n",all_requests_backup[i]-all_requests_backup[i+1]);
 	  i+=2;
 	} else {
 	  //printf("%lld\n",all_requests[i]);
@@ -200,33 +201,33 @@ void send(){
 }
 void parallel(){
   if ( world_rank == 0){
-    tree = new long long[size];
+    tree = new num[size];
     for(int i = 0; i < size; i++) tree[i] = 0;
     procOwner = new int[shift];
     countNr = new int[shift];
-    procCounts = new int[proc];
+    procCounts = new num[proc];
     for(int i = 0; i < proc; i++) procCounts[i] = 0;
     for(int i = 0; i < shift; i++){
-      procOwner[i]=1+rand()%(proc-1);
+      procOwner[i]=1+i%(proc-1);
       procCounts[procOwner[i]]++;
       countNr[i] = procCounts[procOwner[i]]-1;
     }
     for(int i = 1; i < proc; i++){
       MPI::COMM_WORLD.Send(&procCounts[i],1,MPI_INT,i,0);
     } 
-    queries = new long long*[proc];
-    queries_backup = new long long*[proc];
-    requests_queries = new int*[proc];
-    requests_queries_backup = new int*[proc];
+    queries = new num*[proc];
+    queries_backup = new num*[proc];
+    requests_queries = new num*[proc];
+    requests_queries_backup = new num*[proc];
     queries_count = new int[proc];
     queries_count_backup = new int[proc];
-    all_requests = new long long[(proc-1)*batch];
-    all_requests_backup = new long long[(proc-1)*batch];
+    all_requests = new num[(proc-1)*batch];
+    all_requests_backup = new num[(proc-1)*batch];
     for(int i = 0; i < proc; i++){
       queries_count[i] = 0;
       queries_count_backup[i] = 0;
-	  queries[i] = new long long[3*batch];
-	  queries_backup[i] = new long long[3*batch];
+	  queries[i] = new num[3*batch];
+	  queries_backup[i] = new num[3*batch];
 	  requests_queries[i] = new int[3*batch];
 	  requests_queries_backup[i] = new int[3*batch];	
 	}
@@ -247,7 +248,7 @@ void parallel(){
     send();
     send();
     
-    long long w = -1;
+    num w = -1;
     for(int i = 1; i < proc; i++){
       MPI::COMM_WORLD.Send(&w,1,MPI_INT,i,0);
     }
@@ -260,23 +261,23 @@ void parallel(){
   } else {
     MPI::COMM_WORLD.Recv(&nr_of_subtrees,1,MPI_INT,0,0,status);
     initialize(nr_of_subtrees);
-    buff = new long long[3*batch];
+    buff = new num[3*batch];
     while(true){
-      int g=0;
+      num g=0;
       MPI::COMM_WORLD.Recv(&g,1,MPI_INT,0,0,status);
       
       if(g>=0){
-        MPI::COMM_WORLD.Recv(buff,3*g,MPI_LONG_LONG_INT,0,0,status);
+        MPI::COMM_WORLD.Recv(buff,3*g,MPI_INT,0,0,status);
         for(int i = 0; i < 3*g; i +=3){
 
-			if(buff[i] == -1){
+		if(buff[i] == -1){
 		      sub_insert(trees[buff[i+1]],buff[i+2]);
 		      buff[i/3]=0;   
 		    } else {
 			  buff[i/3]=sub_query(trees[buff[i]],buff[i+1],buff[i+2]);	
 		    }
 		}
-		MPI::COMM_WORLD.Send(buff,g,MPI_LONG_LONG_INT,0,0);
+		MPI::COMM_WORLD.Send(buff,g,MPI_INT,0,0);
       } else {
       
         break;
@@ -299,7 +300,7 @@ int main(int argc, char** argv) {
   }
   proc = atoi(argv[1]);
 
-  range = atoi(argv[2]);
+  range = atol(argv[2]);
   int w = 1; 
   while(w < range) w *= 2;
   range = w;
@@ -333,8 +334,8 @@ int main(int argc, char** argv) {
 /////////////////////////////////////////////////////////////////////////////////////
 // SUB PROCEDURES
 /////////////////////////////////////////////////////////////////////////////////////
-void sub_insert(long long *sub_tree, long long x){
-  long long v = sub_shift+x;
+void sub_insert(num *sub_tree, num x){
+  num v = sub_shift+x;
   sub_tree[v]++;
   while(v!=1){
     v/=2;
@@ -343,11 +344,11 @@ void sub_insert(long long *sub_tree, long long x){
 
 }
 
-long long sub_query(long long* sub_tree, long long a, long long b){
+num sub_query(num* sub_tree, num a, num b){
   if(b<a||a<0||b<0)return 0;
-  long long va = sub_shift+a;
-  long long vb = sub_shift+b;
-  long long wyn = sub_tree[va];
+  num va = sub_shift+a;
+  num vb = sub_shift+b;
+  num wyn = sub_tree[va];
   if(va!= vb) wyn+=sub_tree[vb];
   while(va/2!=vb/2){
     if(va%2==0) wyn += sub_tree[va+1];
